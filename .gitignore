@@ -1,0 +1,5 @@
+tools/node_modules/
+media/*.wav
+media/*.video.mp4
+.claude/
+.DS_Store
