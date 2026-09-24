@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Kagerō Duel 3D</title>
+<meta name="description" content="A Sekiro-style sword duel in 3D, in the browser. Lock on, circle him, deflect his random strings on the frame, break his posture, land the deathblow.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Kagerō 3D — a Sekiro-style deflect duel">
+<meta property="og:description" content="Lock on, circle him, deflect on the frame. Plays in your browser.">
+<meta property="og:url" content="https://qihang-dai.github.io/kagero-duel/3d/">
+<meta property="og:image" content="https://qihang-dai.github.io/kagero-duel/og.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://qihang-dai.github.io/kagero-duel/og.jpg">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<style>
+  :root {
+    color-scheme: dark;
+    --ink: #09080d;
+    --paper: #ece2cc;
+    --ash: #9a91a3;
+    --ember: #ffae4a;
+    --blood: #c42a1f;
+    --line: rgba(236, 226, 204, 0.16);
+    --display: "Shippori Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
+    --body: "Zen Kaku Gothic New", "Hiragino Sans", system-ui, sans-serif;
+  }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--ink); color: var(--paper);
+    font-family: var(--body); overflow: hidden;
+    -webkit-user-select: none; user-select: none; touch-action: none;
+  }
+  #game, #hud { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #hud { pointer-events: none; }
+
+  .veil {
+    position: fixed; inset: 0; display: grid; align-items: center;
+    padding-inline: max(16px, 6vw); padding-block: 24px;
+    background: linear-gradient(90deg, rgba(9,8,13,0.92) 0%, rgba(9,8,13,0.72) 46%, rgba(9,8,13,0.05) 80%);
+    overflow-y: auto;
+  }
+  .veil-inner { max-width: 560px; display: grid; gap: 20px; }
+  .eyebrow { font-size: 12px; letter-spacing: 0.32em; text-transform: uppercase; color: var(--ash); }
+  h1 {
+    margin: 0; font-family: var(--display); font-weight: 800;
+    font-size: clamp(56px, 11vw, 112px); line-height: 0.9; letter-spacing: 0.02em;
+  }
+  h1 .kanji { display: block; font-size: 0.42em; color: var(--blood); letter-spacing: 0.3em; margin-bottom: 10px; }
+  h1 sup { font-size: 0.3em; letter-spacing: 0.1em; color: var(--ember); vertical-align: top; margin-left: 6px; }
+  .lede { margin: 0; font-size: 16px; line-height: 1.65; color: #cfc5b1; max-width: 46ch; }
+  .controls {
+    display: grid; grid-template-columns: auto 1fr; gap: 8px 18px;
+    font-size: 14px; line-height: 1.4; padding-block: 16px;
+    border-block: 1px solid var(--line); margin: 0;
+  }
+  .controls dt { white-space: nowrap; }
+  .controls dd { margin: 0; color: #c9bfab; }
+  kbd {
+    font-family: var(--body); font-size: 12px; font-weight: 700;
+    padding: 2px 7px; border: 1px solid rgba(236,226,204,0.35); border-bottom-width: 2px;
+    border-radius: 3px; color: var(--paper); background: rgba(236,226,204,0.06);
+  }
+  .perils { display: grid; gap: 6px; font-size: 13.5px; color: #c9bfab; }
+  .perils b { font-family: var(--display); color: var(--blood); font-size: 18px; margin-right: 6px; }
+  .row { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+  .tempo { display: inline-flex; border: 1px solid var(--line); }
+  .tempo input { position: absolute; opacity: 0; pointer-events: none; }
+  .tempo label {
+    padding: 9px 14px; font-size: 13px; cursor: pointer; color: var(--ash);
+    border-right: 1px solid var(--line); letter-spacing: 0.04em;
+  }
+  .tempo label:last-of-type { border-right: 0; }
+  .tempo input:checked + label { background: var(--paper); color: var(--ink); }
+  .tempo input:focus-visible + label { outline: 2px solid var(--ember); outline-offset: -2px; }
+  .begin {
+    font-family: var(--display); font-weight: 700; font-size: 20px; letter-spacing: 0.08em;
+    padding: 12px 28px; background: var(--blood); color: #fff3e6; border: 0; cursor: pointer;
+  }
+  .begin:hover { background: #d8382b; }
+  .begin:focus-visible { outline: 2px solid var(--paper); outline-offset: 3px; }
+  .begin:disabled { background: #5a2a26; cursor: progress; }
+  .hint { font-size: 12px; color: var(--ash); line-height: 1.6; }
+  .hint a { color: var(--paper); }
+
+  .touch { position: fixed; inset: auto 0 0 0; pointer-events: none; padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .touch .pad { position: absolute; bottom: 18px; pointer-events: auto; }
+  .touch .left { left: 16px; display: grid; grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(2, 56px); gap: 8px; }
+  .touch .left [data-k="fwd"] { grid-column: 2; grid-row: 1; }
+  .touch .left [data-k="sl"] { grid-column: 1; grid-row: 2; }
+  .touch .left [data-k="back"] { grid-column: 2; grid-row: 2; }
+  .touch .left [data-k="sr"] { grid-column: 3; grid-row: 2; }
+  .touch .right { right: 16px; display: grid; grid-template-columns: repeat(3, 60px); gap: 10px; }
+  .touch button {
+    width: 60px; height: 60px; border-radius: 50%; border: 1px solid rgba(236,226,204,0.35);
+    background: rgba(9,8,13,0.45); color: var(--paper); font-family: var(--display); font-size: 20px;
+    touch-action: none;
+  }
+  .touch .left button { width: 56px; height: 56px; font-size: 16px; }
+  .touch button small { display: block; font-family: var(--body); font-size: 9px; letter-spacing: 0.08em; color: var(--ash); }
+  .touch .big { grid-row: span 2; height: 130px; border-radius: 30px; color: var(--ember); }
+  .fail { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; background: var(--ink); }
+  .fail a { color: var(--ember); }
+  @media (max-width: 520px) { .controls { font-size: 13px; } .veil { background: rgba(9,8,13,0.86); } }
+</style>
+
+<canvas id="game" aria-label="Duel arena, in 3D"></canvas>
+<canvas id="hud" aria-hidden="true"></canvas>
+
+<div class="veil" id="veil">
+  <div class="veil-inner">
+    <div class="eyebrow" id="eyebrow">A duel of deflection</div>
+    <h1><span class="kanji">陽炎</span>Kagerō<sup>3D</sup></h1>
+    <p class="lede" id="lede">The same burnt pass, now in the round. Lock eyes with the wandering swordsman, circle him through the pampas grass, meet each blow on the edge of yours, and finish him — twice.</p>
+    <dl class="controls">
+      <dt><kbd>W</kbd> <kbd>S</kbd></dt><dd>Step in · step back (he is always locked on)</dd>
+      <dt><kbd>A</kbd> <kbd>D</kbd></dt><dd>Circle him (arrow keys work too)</dd>
+      <dt><kbd>K</kbd> / right-click</dt><dd>Tap on impact to <strong>deflect</strong>; hold to guard. Mashing shrinks the window.</dd>
+      <dt><kbd>J</kbd> / left-click</dt><dd>Attack · on a broken foe, <strong>deathblow</strong></dd>
+      <dt><kbd>Space</kbd></dt><dd>Jump</dd>
+      <dt><kbd>Shift</kbd></dt><dd>Dodge · with <kbd>W</kbd> into a thrust for <strong>Mikiri</strong> · with <kbd>A</kbd>/<kbd>D</kbd> to sidestep</dd>
+      <dt><kbd>F</kbd></dt><dd>Drink from the gourd (3)</dd>
+      <dt><kbd>C</kbd></dt><dd>Camera: over the shoulder / side-on</dd>
+      <dt><kbd>Esc</kbd> <kbd>R</kbd></dt><dd>Pause · retry</dd>
+    </dl>
+    <div class="perils">
+      <div><b>危</b>Thrust — Mikiri counter, or deflect it clean.</div>
+      <div><b>危</b>Low sweep — jump it, then attack mid-air to stomp.</div>
+      <div><b>危</b>Charge — cannot be blocked. Sidestep, dodge or jump away.</div>
+    </div>
+    <div class="row">
+      <div class="tempo" role="radiogroup" aria-label="Tempo">
+        <input type="radio" name="tempo" id="t-measured" value="measured"><label for="t-measured">Measured</label>
+        <input type="radio" name="tempo" id="t-sword" value="swordmaster" checked><label for="t-sword">Swordmaster</label>
+        <input type="radio" name="tempo" id="t-demon" value="demon"><label for="t-demon">Demon</label>
+      </div>
+      <button class="begin" id="begin" disabled>Draw your blade</button>
+    </div>
+    <div class="hint">Gamepad: left stick move · RB attack · LB deflect · A jump · B dodge · X heal · Y camera. Sound on.<br><a href="../">Play the original 2D duel</a></div>
+  </div>
+</div>
+
+<div class="touch" id="touch" hidden>
+  <div class="pad left">
+    <button data-k="fwd" aria-label="Step in">▲</button>
+    <button data-k="sl" aria-label="Circle left">◀</button>
+    <button data-k="back" aria-label="Step back">▼</button>
+    <button data-k="sr" aria-label="Circle right">▶</button>
+  </div>
+  <div class="pad right">
+    <button data-k="jump">跳<small>JUMP</small></button>
+    <button data-k="attack">斬<small>ATTACK</small></button>
+    <button data-k="guard" class="big">弾<small>DEFLECT</small></button>
+    <button data-k="heal">癒<small>HEAL</small></button>
+    <button data-k="dodge">避<small>DODGE</small></button>
+  </div>
+</div>
+
+<div class="fail" id="fail" hidden>
+  <p>The 3D arena couldn’t start here (WebGL or the three.js download failed).<br><a href="../">Play the 2D duel instead</a></p>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+} }
+</script>
+<script>
+  // if the module never boots (blocked CDN, no WebGL), say so instead of showing a dead button
+  setTimeout(() => { if (!window.__kagero3d) document.getElementById('fail').hidden = false; }, 15000);
+</script>
+<script type="module" src="game.js"></script>
+</html>
