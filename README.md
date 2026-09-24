@@ -32,3 +32,13 @@ A second game in the same repo: a pixel-art JRPG boss fight in the reactive turn
 - Three heroes, with AP, skills and timed rings. Free-aim shots knock off its chime shields and hit the dial's weak point, and its break gauge stuns it.
 - Three phases: a mark that counts down to Erasure, and a twelve-strike finale at midnight.
 - Its turn: J parry · K dodge · Space jump. Your turn: arrows + J/K. Story, Normal and Hard difficulties. Gamepad and touch work too.
+
+## Greystep (3D)
+
+The same party in 3D, facing the Basalt Warden, a giant built from basalt columns. The camera sits over the shoulder of whoever is acting, the way Expedition 33 frames its fights. On your turn that hero steps forward, and the command menu appears beside them as slanted brush strokes. On its turn the Warden walks up to slam you, hurls boulders, and sends shockwaves rolling across the ground.
+
+**Play:** https://qihang-dai.github.io/kagero-duel/greystep/
+
+- `greystep/index.html` + `game.js`, with three.js loaded from a CDN (no build step). Every model is generated in code: the Warden, the cliffs and the stumps are merged hexagonal prisms, and the heroes are built from primitives. The HUD portraits are rendered from those same models at startup.
+- Its turn: J parry · K dodge · Space jump. Parry or jump a whole string and each targeted hero counters. Your turn: 1–4 or arrows + J, K back. Free aim uses the mouse or arrows. Shots knock off the blue shield crystals, and the core is a weak point.
+- At half health the Warden becomes enraged: its seams burn red, and it gains faster strings and the five-hit CATACLYSM.
