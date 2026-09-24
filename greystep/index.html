@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Greystep</title>
+<meta name="description" content="A 3D reactive turn-based boss fight in the browser. Stand behind your party, pick commands on your turn, and parry, dodge and jump a living basalt giant's strikes in real time.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Greystep — a reactive turn-based boss fight in 3D">
+<meta property="og:description" content="Over the shoulder of your party, facing a giant of living basalt. Parry its strikes on impact, jump its quakes, shoot the crystals off. Plays in your browser.">
+<meta property="og:url" content="https://qihang-dai.github.io/kagero-duel/greystep/">
+<meta property="og:image" content="https://qihang-dai.github.io/kagero-duel/greystep/og.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://qihang-dai.github.io/kagero-duel/greystep/og.jpg">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Spectral:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+  :root {
+    color-scheme: dark;
+    --ink: #0b0a09;
+    --paper: #efe6d2;
+    --ash: #a39c8e;
+    --gold: #d9b35a;
+    --gold-hi: #f3d68a;
+    --blood: #b8322a;
+    --ap: #6fb6ff;
+    --display: "Cinzel", "Trajan Pro", Georgia, serif;
+    --body: "Spectral", Georgia, serif;
+  }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--ink); color: var(--paper); font-family: var(--body);
+    overflow: hidden; -webkit-user-select: none; user-select: none; touch-action: none;
+  }
+  #gl, #fx { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #fx { pointer-events: none; }
+  #flash { position: fixed; inset: 0; pointer-events: none; opacity: 0; }
+  .vignette { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 45%, transparent 55%, rgba(5, 4, 3, 0.55) 100%); }
+
+  /* ── brush strips: the command menu ── */
+  #menu { position: fixed; left: 0; top: 0; display: grid; gap: 6px; pointer-events: none; }
+  .strip {
+    --shift: 0px;
+    position: relative; display: flex; align-items: center; gap: 12px;
+    height: 40px; min-width: 210px; padding: 0 38px 0 20px; box-sizing: border-box;
+    margin-left: var(--shift); pointer-events: auto; cursor: pointer;
+    font: 600 17px/1 var(--display); letter-spacing: 0.1em; color: var(--paper);
+    background: linear-gradient(98deg, transparent 0 1%, rgba(12, 11, 10, 0.94) 7% 86%, transparent 99%);
+    clip-path: polygon(0 26%, 5% 6%, 34% 0, 72% 9%, 100% 24%, 96% 60%, 100% 86%, 64% 100%, 22% 93%, 3% 100%);
+    transform: rotate(-7deg) skewX(-12deg);
+    transition: transform 0.12s ease, filter 0.12s ease;
+  }
+  .strip::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background:
+      linear-gradient(90deg, transparent 38%, var(--gold) 62%, transparent 88%) left 0 bottom 7px / 100% 2px no-repeat,
+      linear-gradient(90deg, transparent 55%, var(--gold-hi) 74%, transparent 96%) left 0 bottom 12px / 100% 1px no-repeat,
+      linear-gradient(90deg, transparent 10%, rgba(217, 179, 90, 0.5) 22%, transparent 40%) left 0 top 8px / 100% 1px no-repeat;
+    opacity: 0.8;
+  }
+  .strip > * { transform: skewX(12deg); }
+  .strip .key {
+    flex: none; width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid rgba(239, 230, 210, 0.8);
+    display: grid; place-items: center; font: 600 11px/1 var(--display);
+  }
+  .strip .cost { margin-left: auto; display: flex; gap: 3px; }
+  .strip .cost i { width: 7px; height: 7px; background: var(--ap); transform: rotate(45deg); box-shadow: 0 0 6px rgba(111, 182, 255, 0.8); }
+  .strip .count { margin-left: auto; font-size: 14px; color: var(--ash); }
+  .strip.sel { transform: rotate(-7deg) skewX(-12deg) scale(1.08) translateX(10px); color: #fff; filter: drop-shadow(0 0 10px rgba(217, 179, 90, 0.55)); }
+  .strip.sel::after { opacity: 1; }
+  .strip.sel .key { border-color: var(--gold-hi); color: var(--gold-hi); }
+  .strip.off { color: #6d675c; }
+  .strip.off .cost i { background: #3a4550; box-shadow: none; }
+  .strip.head { cursor: default; height: 30px; min-width: 150px; font-size: 13px; color: var(--gold-hi); background: linear-gradient(98deg, transparent 0 2%, rgba(12, 11, 10, 0.8) 10% 80%, transparent 99%); }
+  .strip.head::after { display: none; }
+
+  /* ── description panel ── */
+  .panel {
+    position: fixed; right: max(18px, 3vw); top: 34vh; width: min(300px, 34vw); padding: 22px 26px 24px;
+    background: radial-gradient(ellipse at 40% 50%, rgba(10, 9, 8, 0.95) 55%, rgba(10, 9, 8, 0) 72%);
+    font-size: 15px; line-height: 1.5; color: #d9d0bd; pointer-events: none;
+  }
+  .panel h3 { margin: 0 0 6px; font: 600 20px/1.2 var(--display); color: var(--paper); letter-spacing: 0.06em; }
+
+  /* ── boss plate ── */
+  #boss { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); width: min(560px, 70vw); text-align: center; pointer-events: none; }
+  #boss .name { font: 600 15px/1 var(--display); letter-spacing: 0.3em; text-shadow: 0 2px 6px #000; }
+  #boss .hp { position: relative; height: 8px; margin-top: 8px; background: rgba(20, 8, 8, 0.8); border: 1px solid rgba(239, 230, 210, 0.35); }
+  #boss .hp i, #boss .hp b { position: absolute; left: 0; top: 0; bottom: 0; }
+  #boss .hp b { background: #e8d9b8; transition: width 0.6s ease 0.25s; }
+  #boss .hp i { background: linear-gradient(180deg, #d9443a, #8e1d18); }
+  #boss .row { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+  #boss .brk { flex: 1; height: 4px; background: rgba(30, 24, 10, 0.8); border: 1px solid rgba(217, 179, 90, 0.35); }
+  #boss .brk i { display: block; height: 100%; background: var(--gold); }
+  #boss .brk.full i { background: #fff; animation: blink 0.2s steps(2) infinite; }
+  #boss .tags { display: flex; gap: 8px; font: 600 11px/1 var(--display); letter-spacing: 0.1em; min-width: 120px; justify-content: flex-end; }
+  #boss .tags span { padding: 3px 6px; background: rgba(10, 9, 8, 0.7); border: 1px solid currentColor; }
+  @keyframes blink { 50% { opacity: 0.4; } }
+
+  /* ── turn order ── */
+  #order { position: fixed; left: 0; top: 70px; display: grid; gap: 4px; pointer-events: none; }
+  #order div {
+    width: 64px; height: 38px; background-size: cover; background-position: center 30%;
+    clip-path: polygon(0 0, 100% 0, 88% 100%, 0 100%); opacity: 0.85; border-left: 3px solid transparent;
+    background-color: #1a1814;
+  }
+  #order div.now { width: 84px; height: 48px; opacity: 1; border-left-color: var(--gold); }
+  #order div.boss { filter: saturate(0.6) brightness(0.9); }
+
+  /* ── party cards ── */
+  #party { position: fixed; right: max(14px, 2vw); bottom: max(14px, 2vh); display: flex; gap: 12px; align-items: flex-end; pointer-events: none; }
+  .card { position: relative; width: 150px; padding: 8px 10px 10px 58px; background: linear-gradient(100deg, transparent 0, rgba(10, 9, 8, 0.88) 18% 85%, transparent); transition: transform 0.2s; }
+  .card img { position: absolute; left: 4px; bottom: 6px; width: 50px; height: 50px; border-radius: 50%; border: 2px solid rgba(239, 230, 210, 0.5); background: #1a1814; }
+  .card .nm { font: 600 12px/1 var(--display); letter-spacing: 0.14em; }
+  .card .hpn { font: 600 20px/1.1 var(--display); margin-top: 3px; }
+  .card .hpn small { font-size: 12px; color: var(--ash); }
+  .card .bar { height: 5px; background: rgba(40, 10, 10, 0.9); margin-top: 3px; }
+  .card .bar i { display: block; height: 100%; background: linear-gradient(90deg, #e05a4a, #b8322a); }
+  .card .ap { display: flex; gap: 4px; margin-top: 6px; }
+  .card .ap i { width: 8px; height: 8px; transform: rotate(45deg); background: #22303c; }
+  .card .ap i.on { background: var(--ap); box-shadow: 0 0 6px rgba(111, 182, 255, 0.8); }
+  .card.now { transform: scale(1.14); transform-origin: bottom right; }
+  .card.now img { border-color: var(--gold); }
+  .card.ko { filter: grayscale(1) brightness(0.6); }
+  .card.low .hpn { color: #ff8a7a; }
+  .card .st { position: absolute; right: 8px; top: 6px; font: 600 10px/1 var(--display); color: var(--ap); letter-spacing: 0.1em; }
+
+  /* ── prompts, banner, dialog ── */
+  #prompt { position: fixed; left: max(18px, 2vw); bottom: max(18px, 2.5vh); display: flex; gap: 22px; font: 600 13px/1 var(--display); letter-spacing: 0.08em; text-shadow: 0 2px 4px #000; pointer-events: none; }
+  #prompt span { display: flex; align-items: center; gap: 8px; }
+  #prompt kbd, .veil kbd { font: 600 11px/1 var(--display); padding: 4px 7px; border: 1.5px solid rgba(239, 230, 210, 0.7); border-radius: 4px; background: rgba(10, 9, 8, 0.6); color: var(--paper); }
+  #banner {
+    position: fixed; top: 76px; left: 50%; transform: translateX(-50%); padding: 10px 60px; white-space: nowrap;
+    font: 800 24px/1 var(--display); letter-spacing: 0.22em; pointer-events: none;
+    background: linear-gradient(90deg, transparent, rgba(10, 9, 8, 0.9) 22% 78%, transparent);
+    text-shadow: 0 0 18px rgba(0, 0, 0, 0.8); opacity: 0; transition: opacity 0.18s;
+  }
+  #banner.on { opacity: 1; }
+  #dlg {
+    position: fixed; left: 50%; bottom: 14vh; transform: translateX(-50%); width: min(760px, 86vw); padding: 18px 60px;
+    text-align: center; font: 400 19px/1.55 var(--body); color: #f1e9d8; pointer-events: none;
+    background: linear-gradient(90deg, transparent, rgba(8, 7, 6, 0.86) 16% 84%, transparent);
+  }
+  #dlg .more { display: block; font: 600 11px/1 var(--display); letter-spacing: 0.2em; color: var(--ash); margin-top: 10px; }
+
+  #results {
+    position: fixed; inset: 0; display: grid; place-items: center; background: rgba(6, 5, 4, 0.55);
+  }
+  #results .box { min-width: min(420px, 86vw); padding: 30px 44px; background: radial-gradient(ellipse at 50% 50%, rgba(10, 9, 8, 0.96) 60%, rgba(10, 9, 8, 0.0) 76%); text-align: center; }
+  #results h2 { margin: 0 0 16px; font: 800 34px/1 var(--display); letter-spacing: 0.2em; color: var(--gold-hi); }
+  #results h2.lose { color: #e0685a; }
+  #results table { margin: 0 auto; border-collapse: collapse; font: 400 16px/1.7 var(--body); }
+  #results td { padding: 0 14px; text-align: left; color: #d9d0bd; }
+  #results td + td { text-align: right; color: #fff; font-family: var(--display); }
+  #results .rank { font: 800 44px/1 var(--display); color: var(--gold-hi); margin-top: 14px; }
+  #results button { margin-top: 18px; }
+
+  /* ── title ── */
+  .veil {
+    position: fixed; inset: 0; display: grid; align-items: center; padding: 24px max(16px, 6vw); overflow-y: auto;
+    background: linear-gradient(90deg, rgba(8, 7, 6, 0.92) 0%, rgba(8, 7, 6, 0.74) 44%, rgba(8, 7, 6, 0.05) 78%);
+  }
+  .veil-inner { max-width: 560px; display: grid; gap: 20px; }
+  .eyebrow { font: 600 11px/1.5 var(--display); letter-spacing: 0.32em; color: var(--ash); }
+  h1 { margin: 0; font: 800 clamp(48px, 10vw, 96px)/0.95 var(--display); letter-spacing: 0.04em; }
+  h1 small { display: block; font-size: 0.24em; letter-spacing: 0.3em; color: var(--gold); margin-top: 14px; }
+  .lede { margin: 0; font-size: 17px; line-height: 1.6; color: #d8cfbc; max-width: 48ch; }
+  .controls { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 10px 18px; font-size: 15px; line-height: 1.5; padding-block: 16px; border-block: 1px solid rgba(239, 230, 210, 0.16); }
+  .controls dt { font: 600 12px/1.9 var(--display); letter-spacing: 0.12em; color: var(--gold); white-space: nowrap; }
+  .controls dd { margin: 0; color: #cfc6b2; }
+  .row { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+  .diff { display: inline-flex; border: 1px solid rgba(239, 230, 210, 0.3); }
+  .diff input { position: absolute; opacity: 0; pointer-events: none; }
+  .diff label { padding: 10px 14px; font: 600 12px/1 var(--display); letter-spacing: 0.1em; cursor: pointer; color: var(--ash); border-right: 1px solid rgba(239, 230, 210, 0.3); }
+  .diff label:last-of-type { border-right: 0; }
+  .diff input:checked + label { background: var(--paper); color: var(--ink); }
+  .diff input:focus-visible + label { outline: 2px solid var(--gold); outline-offset: -2px; }
+  .begin, #results button {
+    font: 800 18px/1 var(--display); letter-spacing: 0.14em; padding: 14px 30px; cursor: pointer;
+    background: var(--gold); color: #1a1206; border: 0; clip-path: polygon(4% 0, 100% 6%, 96% 100%, 0 92%);
+  }
+  .begin:hover, #results button:hover { background: var(--gold-hi); }
+  .begin:focus-visible, #results button:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+  .begin:disabled { opacity: 0.5; cursor: wait; }
+  .hint { font-size: 13px; color: var(--ash); line-height: 1.6; }
+  .hint a { color: var(--ash); }
+  .fail { position: fixed; inset: auto 0 0 0; padding: 16px; text-align: center; background: #2a0d0a; }
+  .fail a { color: var(--gold); }
+
+  .touch { position: fixed; inset: auto 0 0 0; height: 120px; display: flex; justify-content: space-between; align-items: center; padding: 0 16px env(safe-area-inset-bottom, 0px); box-sizing: border-box; pointer-events: none; }
+  .touch .grp { display: flex; gap: 10px; pointer-events: auto; }
+  .touch button { width: 66px; height: 66px; border-radius: 50%; border: 1.5px solid rgba(239, 230, 210, 0.5); background: rgba(10, 9, 8, 0.55); color: var(--paper); font: 600 10px/1 var(--display); letter-spacing: 0.08em; touch-action: none; }
+  .touch button.big { width: 84px; height: 84px; color: var(--gold-hi); border-color: var(--gold); }
+  body.touching #party { bottom: 124px; }
+  body.touching #prompt { display: none; }
+  @media (max-width: 720px) {
+    .card { width: 118px; padding-left: 50px; } .card img { width: 42px; height: 42px; } .card .hpn { font-size: 16px; }
+    .panel { top: auto; bottom: 150px; right: 8px; width: 60vw; font-size: 13px; }
+    #order div { width: 48px; height: 30px; } #order div.now { width: 60px; height: 38px; }
+    .veil { background: rgba(8, 7, 6, 0.86); }
+  }
+</style>
+
+<canvas id="gl"></canvas>
+<canvas id="fx"></canvas>
+<div class="vignette"></div>
+<div id="flash"></div>
+
+<div id="hud" hidden>
+  <div id="boss">
+    <div class="name">THE BASALT WARDEN</div>
+    <div class="hp"><b></b><i></i></div>
+    <div class="row"><div class="brk"><i></i></div><div class="tags"></div></div>
+  </div>
+  <div id="order"></div>
+  <div id="menu"></div>
+  <div class="panel" id="desc" hidden></div>
+  <div id="party"></div>
+  <div id="prompt"></div>
+  <div id="banner"></div>
+  <div id="dlg" hidden></div>
+  <div id="results" hidden></div>
+</div>
+
+<div class="veil" id="veil">
+  <div class="veil-inner">
+    <div class="eyebrow">A reactive turn-based boss fight · 3D</div>
+    <h1>Greystep<small>vs. the Basalt Warden</small></h1>
+    <p class="lede">After the bell fell silent, Aldric, Wren and Sable took the north road. At Greystep the pass is held by a warden of living basalt, built from the same stone as the cliffs around it.</p>
+    <dl class="controls">
+      <dt>Its turn</dt><dd><kbd>J</kbd> parry right on impact · <kbd>K</kbd> dodge · <kbd>Space</kbd> jump its quakes. Parry or jump a whole string to counter.</dd>
+      <dt>Your turn</dt><dd><kbd>1</kbd>–<kbd>4</kbd> or <kbd>↑</kbd><kbd>↓</kbd> + <kbd>J</kbd> to choose, <kbd>K</kbd> back. Press <kbd>J</kbd> as a skill’s ring closes.</dd>
+      <dt>Aim</dt><dd>Mouse or arrows, <kbd>J</kbd> / click fires (1 AP). Shoot the blue crystals to strip its shields. The glowing core takes extra damage.</dd>
+    </dl>
+    <div class="row">
+      <div class="diff" role="radiogroup" aria-label="Difficulty">
+        <input type="radio" name="diff" id="d-story" value="story"><label for="d-story">STORY</label>
+        <input type="radio" name="diff" id="d-normal" value="normal" checked><label for="d-normal">NORMAL</label>
+        <input type="radio" name="diff" id="d-hard" value="hard"><label for="d-hard">HARD</label>
+      </div>
+      <button class="begin" id="begin" disabled>LOADING</button>
+    </div>
+    <div class="hint">Story widens the timing windows and shows rings. Gamepad: A parry/confirm · B dodge/back · Y jump. <kbd>M</kbd> mutes. Also: <a href="../pale-hour/">Pale Hour</a> (the pixel version) · <a href="../">Kagerō</a>.</div>
+  </div>
+</div>
+
+<div class="touch" id="touch" hidden>
+  <div class="grp"><button data-k="Escape">BACK</button><button data-k="KeyK">DODGE</button></div>
+  <div class="grp"><button data-k="Space">JUMP</button><button class="big" data-k="KeyJ">PARRY<br>OK</button></div>
+</div>
+
+<div class="fail" id="fail" hidden>
+  <p>The 3D scene couldn’t start here (WebGL or the three.js download failed). <a href="../pale-hour/">Play the pixel version instead</a>.</p>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+} }
+</script>
+<script>
+  setTimeout(() => { if (!window.__greystep) document.getElementById('fail').hidden = false; }, 15000);
+</script>
+<script type="module" src="game.js"></script>
+</html>
